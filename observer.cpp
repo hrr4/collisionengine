@@ -1,5 +1,6 @@
 #include <iostream>
 #include <list>
+#include <map>
 
 // Maybe i dont needs this now...... could just file it away though :)
 // This should return the floor that is the least *which means closest*
@@ -95,18 +96,24 @@ class Collider;
 class ICollide : public Subject {
 public:
 	virtual ~ICollide();
-	Collider* FindNearest(Collider*);
+	Collider* FindNearest();
 	bool TestRadii(Collider*, Collider*);
-	bool TestAABB(Collider*);
+	bool TestAABB(Collider*, Collider*);
 };
 
-// FOR NOW THE CODE HAS TO BE SPLIT LIKE THIS UNTIL I CAN FIX THIS FORWARD DECLARATION SHIT
 
 // CLASS COLLIDER
 class Collider : public Observer, public Entity {
+protected:
+	enum CollEnum {player, player_projectile, enemy_projectile, enemy};
+	CollEnum Type_C;
+
 public:
 	virtual ~Collider();
 	virtual bool CheckCollision();
+	virtual void Update(Subject*);
+	CollEnum GetType() const;
+
 protected:
 	Collider();
 	ICollide* _collide;
@@ -116,35 +123,46 @@ Collider::Collider() {}
 
 Collider::~Collider() {}
 
+Collider::CollEnum Collider::GetType() const {return this->Type_C;};
+
 bool Collider::CheckCollision() {
 	// Actual collision checking done here.
-	// 1. Find the nearest collider
+	// 1. Find the nearest 2 colliders
 	// 2. Check Radii regardless of distance..(Could be optimized)
 	// 3. If Radii touch/overlap, test AABB.
-	if (!(_collide->TestRadii(this, _collide->FindNearest(this))))
-		// NEXT ON THIS LIST IS HOW TO PASS NEAREST COLLIDER TO TESTAABB NIGHT NIGHT!
-		_collide->TestAABB(this);
+	if (!(_collide->TestRadii(this, _collide->FindNearest())))
+		//_collide->TestAABB(this);
+		return false;
 	return true;
 }
 
+void Collider::Update(Subject* ChangedSubject) {
+	if (ChangedSubject != _collide) {
+		_collide = static_cast<ICollide*>(ChangedSubject);
+	}
+}
 
 // CONTINUE ICOLLIDE
 ICollide::~ICollide() {}
 
-Collider* ICollide::FindNearest(Collider* c1) {
-	float x1 = c1->GetX(), y1 = c1->GetY(), xTemp, xClosest = 0, yTemp, yClosest = 0;
-	Collider* closestC;
+Collider* ICollide::FindNearest() {
+    Collider* previousC, *nextC;
 
 	std::list<Observer*>::iterator it;
 	for (it = _observers.begin(); it != _observers.end(); ++it) {
-		if (*it != c1) {
+		if (it == _observers.begin()) {
+        	previousC = reinterpret_cast<Collider*>(*it);
+			continue;
+		}
+    	Collider* nextC = reinterpret_cast<Collider*>(*it);
+    	float x1 = previousC->GetX(), y1 = previousC->GetY(); 
+		float x2 = nextC->GetX(), y2 = previousC->GetY();
+		float xTemp, xClosest = 0, yTemp, yClosest = 0;
+
 			float xOldNear = xClosest;
 			float yOldNear = yClosest;
-        	Collider* c = reinterpret_cast<Collider*>(*it);
     		xTemp = c->GetX();
     		yTemp = c->GetX();
-    		// I think i only need the closest values for the x and y o_o along with a 
-			// reference to the entity that is still closest
 			xClosest = abs(x1 - xTemp);
 			yClosest = abs(y1 - yTemp);
 			if (xClosest < xOldNear) {
@@ -155,9 +173,7 @@ Collider* ICollide::FindNearest(Collider* c1) {
 				yOldNear = yClosest; 
 				closestC = c;
 			}
-		}
 	}
-	// For now.... return false or something
 	return closestC;
 }
 
@@ -195,7 +211,8 @@ bool ICollide::TestRadii(Collider* c1, Collider* c2) {
 }
 */
 
-bool ICollide::TestAABB(Collider* c1) {return false;}
+bool ICollide::TestAABB(Collider* c1, Collider* c2) {return false;}
+
 
 // CLASS PLAYER
 class Player : public Collider {
@@ -207,6 +224,7 @@ public:
 };
 
 Player::~Player() {
+	Type_C = player;
 	_collide->Detach(this);
 }
 
@@ -219,12 +237,6 @@ Player::Player(ICollide* c) {
 }
 
 void Player::Draw() {}
-
-void Player::Update(Subject* ChangedSubject) {
-	if (ChangedSubject != _collide) {
-		_collide = static_cast<ICollide*>(ChangedSubject);
-	}
-}
 
 // CLASS COMET
 class Comet : public Collider {
@@ -243,18 +255,14 @@ Comet::Comet(ICollide* c, int _x, int _y, int _r) {
 	x = _x;
 	y = _y;
 	r = _r;
+	
 	_collide = c;
 	_collide->Attach(this);
 }
 
 void Comet::Draw() {}
 
-void Comet::Update(Subject* ChangedSubject) {
-	if (ChangedSubject != _collide) {
-		_collide = static_cast<ICollide*>(ChangedSubject);
-	}
-}
-
+// MAIN
 int main(int argc, char* argv[]) {
 	// Init Engine
 	ICollide* iCollide = new ICollide();
