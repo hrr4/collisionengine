@@ -20,10 +20,13 @@ public:
 	virtual float GetY();
 	virtual float GetRad();
 	virtual void Draw()=0;
-	bool CheckCollision();
+	bool CheckCollision() const;
+	int GetLayer() const;
 protected:
 	bool isAlive;
 	float x, y, r;
+	// LAYER HACK!
+	unsigned int layer;
 };
 
 Entity::~Entity() {}
@@ -38,6 +41,10 @@ float Entity::GetY() {
 
 float Entity::GetRad() {
 	return r;
+}
+
+int Entity::GetLayer() const {
+	return layer;
 }
 
 class Subject;
@@ -133,55 +140,66 @@ ICollide::~ICollide() {}
 
 Collider* ICollide::FindNearest(Collider* c1) {
 	float x1 = c1->GetX(), y1 = c1->GetY(), xTemp, xClosest = 0, yTemp, yClosest = 0;
-	Collider* closestC;
+	Collider* closestC = 0;
 
 	std::list<Observer*>::iterator it;
 	for (it = _observers.begin(); it != _observers.end(); ++it) {
 		if (*it != c1) {
-			float xOldNear = xClosest;
-			float yOldNear = yClosest;
         	Collider* c = reinterpret_cast<Collider*>(*it);
-    		xTemp = c->GetX();
-    		yTemp = c->GetX();
-    		// I think i only need the closest values for the x and y o_o along with a 
-			// reference to the entity that is still closest
-			xClosest = abs(x1 - xTemp);
-			yClosest = abs(y1 - yTemp);
-			if (xClosest < xOldNear) {
-				xOldNear = xClosest; 
-				closestC = c;
-			}
-			if (yClosest < yOldNear) {
-				yOldNear = yClosest; 
-				closestC = c;
+			if (c->GetLayer() > c1->GetLayer()) {
+    			float xOldNear = xClosest;
+    			float yOldNear = yClosest;
+        		xTemp = c->GetX();
+        		yTemp = c->GetX();
+        		// I think i only need the closest values for the x and y o_o along with a 
+    			// reference to the entity that is still closest
+    			xClosest = abs(x1 - xTemp);
+    			yClosest = abs(y1 - yTemp);
+    			if (xClosest < xOldNear) {
+    				xOldNear = xClosest; 
+    				closestC = c;
+    			}
+    			if (yClosest < yOldNear) {
+    				yOldNear = yClosest; 
+    				closestC = c;
+    			}
 			}
 		}
 	}
-	// For now.... return false or something
-	return closestC;
+	// ClosestC might return false, if nothing else is on that layer
+	if (closestC == 0) {
+		return c1;
+	} else {
+    	return closestC;
+	}
 }
 
 bool ICollide::TestRadii(Collider* c1, Collider* c2) {
-	const float TOUCH_DISTANCE = 0.00001;
-	float x1 = c1->GetX(), y1 = c1->GetY(), r1 = c1->GetRad();
-	float x2 = c2->GetX(), y2 = c1->GetY(), r2 = c1->GetRad();
-	float distance_squared, radii_squared;
-
-	//a^2 + b^2 = c^2
-	distance_squared = ((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2));
-
-	// Multiply rather than sqrt, faster
-	radii_squared = (r1 + r2)*(r1 + r2);
-
-	// Finally, conduct tests
-	if (-TOUCH_DISTANCE < radii_squared - distance_squared && radii_squared - distance_squared < TOUCH_DISTANCE) {
-		// Touching
-		return true;
-	} else if (radii_squared > distance_squared) {
-		// Overlapping
-		return true;
+	// Check to see if object is the same... can happen with my hack :P
+	if (c1 != c2) {
+    	const float TOUCH_DISTANCE = 0.00001;
+    	float x1 = c1->GetX(), y1 = c1->GetY(), r1 = c1->GetRad();
+    	float x2 = c2->GetX(), y2 = c1->GetY(), r2 = c1->GetRad();
+    	float distance_squared, radii_squared;
+    
+    	//a^2 + b^2 = c^2
+    	distance_squared = ((x1 - x2)*(x1 - x2) + (y1 - y2)*(y1 - y2));
+    
+    	// Multiply rather than sqrt, faster
+    	radii_squared = (r1 + r2)*(r1 + r2);
+    
+    	// Finally, conduct tests
+    	if (-TOUCH_DISTANCE < radii_squared - distance_squared && radii_squared - distance_squared < TOUCH_DISTANCE) {
+    		// Touching
+    		return true;
+    	} else if (radii_squared > distance_squared) {
+    		// Overlapping
+    		return true;
+    	} else {
+    		// Nothing
+    		return false;
+    	}
 	} else {
-		// Nothing
 		return false;
 	}
 }
@@ -214,6 +232,7 @@ Player::Player(ICollide* c) {
 	x = 50;
 	y = 50;
 	r = 5;
+	layer = 1;
 	_collide = c;
 	_collide->Attach(this);
 }
@@ -243,6 +262,7 @@ Comet::Comet(ICollide* c, int _x, int _y, int _r) {
 	x = _x;
 	y = _y;
 	r = _r;
+	layer = 2;
 	_collide = c;
 	_collide->Attach(this);
 }
@@ -270,8 +290,8 @@ int main(int argc, char* argv[]) {
 	// Can ICollide SOMEHOW just check for any collisions... in it's list and just push the updates
 	// with one external function call.....
 	player->CheckCollision();
-	comet1->CheckCollision();
-	comet2->CheckCollision();
+	//comet1->CheckCollision();
+	//comet2->CheckCollision();
 	//iCollide->TestRadii(player);
 	return 0;
 }
