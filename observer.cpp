@@ -97,7 +97,10 @@ public:
 protected:
 	virtual void Notify();
 	std::vector<Collider*> potentialsVec;
-	std::vector<Collider*> potentialsVec;
+	// Map will store Collider entity + Position Vector (For now, just hold X or something)
+	// IDEA: Should it hold type?
+	//std::map<Collider*, Vectorf> collidersMap;
+	std::map<Collider*, Collider::CollEnum> collidersMap;
 };
 
 
