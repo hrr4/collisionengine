@@ -1,6 +1,7 @@
 #include <iostream>
 #include <list>
 #include <map>
+#include <vector>
 
 // Maybe i dont needs this now...... could just file it away though :)
 // This should return the floor that is the least *which means closest*
@@ -64,9 +65,9 @@ public:
 
 	void Attach(Observer*);
 	void Detach(Observer*);
-	void Notify();
 protected:
 	Subject();
+	virtual void Notify() = 0;
 	std::list<Observer*> _observers;
 };
 
@@ -82,13 +83,6 @@ void Subject::Detach(Observer* o) {
 	_observers.remove(o);
 }
 
-void Subject::Notify() {
-	std::list<Observer*>::iterator it;
-	for (it = _observers.begin(); it != _observers.end(); ++it) {
-    	Observer* o = *it;
-		o->Update(this);
-	}
-}
 
 class Collider;
 
@@ -99,12 +93,16 @@ public:
 	Collider* FindNearest();
 	bool TestRadii(Collider*, Collider*);
 	bool TestAABB(Collider*, Collider*);
+	bool ConsiderType(Collider*&);
+protected:
+	virtual void Notify();
+	std::vector<Collider*> potentialsVec;
 };
 
 
 // CLASS COLLIDER
 class Collider : public Observer, public Entity {
-protected:
+public:
 	enum CollEnum {player, player_projectile, enemy_projectile, enemy};
 	CollEnum Type_C;
 
@@ -126,10 +124,6 @@ Collider::~Collider() {}
 Collider::CollEnum Collider::GetType() const {return this->Type_C;};
 
 bool Collider::CheckCollision() {
-	// Actual collision checking done here.
-	// 1. Find the nearest 2 colliders
-	// 2. Check Radii regardless of distance..(Could be optimized)
-	// 3. If Radii touch/overlap, test AABB.
 	if (!(_collide->TestRadii(this, _collide->FindNearest())))
 		//_collide->TestAABB(this);
 		return false;
@@ -146,36 +140,39 @@ void Collider::Update(Subject* ChangedSubject) {
 ICollide::~ICollide() {}
 
 Collider* ICollide::FindNearest() {
-    Collider* previousC, *nextC;
+    Collider* currentC, *nextC;
 
 	std::list<Observer*>::iterator it;
 	for (it = _observers.begin(); it != _observers.end(); ++it) {
 		if (it == _observers.begin()) {
-        	previousC = reinterpret_cast<Collider*>(*it);
+        	currentC = reinterpret_cast<Collider*>(*it);
+			ConsiderType(currentC);
 			continue;
 		}
-    	Collider* nextC = reinterpret_cast<Collider*>(*it);
-    	float x1 = previousC->GetX(), y1 = previousC->GetY(); 
-		float x2 = nextC->GetX(), y2 = previousC->GetY();
-		float xTemp, xClosest = 0, yTemp, yClosest = 0;
-
-			float xOldNear = xClosest;
-			float yOldNear = yClosest;
-    		xTemp = c->GetX();
-    		yTemp = c->GetX();
-			xClosest = abs(x1 - xTemp);
-			yClosest = abs(y1 - yTemp);
-			if (xClosest < xOldNear) {
-				xOldNear = xClosest; 
-				closestC = c;
-			}
-			if (yClosest < yOldNear) {
-				yOldNear = yClosest; 
-				closestC = c;
-			}
+        nextC = reinterpret_cast<Collider*>(*it);
 	}
-	return closestC;
+	return currentC;
 }
+
+bool ICollide::ConsiderType(Collider* &c) {
+	Collider* currentC;
+	std::list<Observer*>::iterator it;
+	switch(c->GetType()) {
+	case Collider::player:
+		// Collides with Comets
+    	for (it = _observers.begin(); it != _observers.end(); ++it) {
+        	currentC = reinterpret_cast<Collider*>(*it);
+			if (currentC->GetType() == Collider::enemy ||
+                    currentC->GetType() == Collider::enemy_projectile) {
+						potentialsVec.push_back(currentC);
+			}
+		}
+		break;
+	}
+	return true;
+}
+
+
 
 bool ICollide::TestRadii(Collider* c1, Collider* c2) {
 	const float TOUCH_DISTANCE = 0.00001;
@@ -202,6 +199,13 @@ bool ICollide::TestRadii(Collider* c1, Collider* c2) {
 	}
 }
 
+void ICollide::Notify() {
+	std::list<Observer*>::iterator it;
+	for (it = _observers.begin(); it != _observers.end(); ++it) {
+    	Observer* o = *it;
+		o->Update(this);
+	}
+}
 /*
 bool ICollide::TestRadii(Collider* c1, Collider* c2) {
 	// Needs to accept two Colliders...?
@@ -224,7 +228,6 @@ public:
 };
 
 Player::~Player() {
-	Type_C = player;
 	_collide->Detach(this);
 }
 
@@ -232,9 +235,12 @@ Player::Player(ICollide* c) {
 	x = 50;
 	y = 50;
 	r = 5;
+	Type_C = player;
 	_collide = c;
 	_collide->Attach(this);
 }
+
+void Player::Update(Subject*) {}
 
 void Player::Draw() {}
 
@@ -256,9 +262,12 @@ Comet::Comet(ICollide* c, int _x, int _y, int _r) {
 	y = _y;
 	r = _r;
 	
+	Type_C = enemy;
 	_collide = c;
 	_collide->Attach(this);
 }
+
+void Comet::Update(Subject*) {}
 
 void Comet::Draw() {}
 
@@ -274,12 +283,7 @@ int main(int argc, char* argv[]) {
 	Comet* comet1 = new Comet(iCollide, 200, 10, 10);
 	Comet* comet2 = new Comet(iCollide, 5, 200, 12);
 
-	// Gotta figure a better way to do this.....
-	// Can ICollide SOMEHOW just check for any collisions... in it's list and just push the updates
-	// with one external function call.....
 	player->CheckCollision();
-	comet1->CheckCollision();
-	comet2->CheckCollision();
-	//iCollide->TestRadii(player);
+
 	return 0;
 }
