@@ -93,9 +93,10 @@ public:
 	Collider* FindNearest();
 	bool TestRadii(Collider*, Collider*);
 	bool TestAABB(Collider*, Collider*);
-	bool ConsiderType(Collider*&);
+	void ConsiderType(Collider*&);
 protected:
 	virtual void Notify();
+	std::vector<Collider*> potentialsVec;
 	std::vector<Collider*> potentialsVec;
 };
 
@@ -154,22 +155,38 @@ Collider* ICollide::FindNearest() {
 	return currentC;
 }
 
-bool ICollide::ConsiderType(Collider* &c) {
+void ICollide::ConsiderType(Collider* &c) {
+	// Gotta clear potentialsVec on every consider...
+	potentialsVec.clear();
 	Collider* currentC;
 	std::list<Observer*>::iterator it;
-	switch(c->GetType()) {
-	case Collider::player:
-		// Collides with Comets
-    	for (it = _observers.begin(); it != _observers.end(); ++it) {
-        	currentC = reinterpret_cast<Collider*>(*it);
-			if (currentC->GetType() == Collider::enemy ||
-                    currentC->GetType() == Collider::enemy_projectile) {
-						potentialsVec.push_back(currentC);
-			}
-		}
-		break;
+	for (it = _observers.begin(); it != _observers.end(); ++it) {
+    	currentC = reinterpret_cast<Collider*>(*it);
+
+    	switch(c->GetType()) {
+    	case Collider::player:
+    		// Collides with Comets
+            if (currentC->GetType() == Collider::enemy ||
+                            currentC->GetType() == Collider::enemy_projectile) {
+            		potentialsVec.push_back(currentC);
+            }
+        	break;
+    	case Collider::enemy:
+    		// Collides with player, player_proj
+    		if (currentC->GetType() == Collider::player ||
+                            currentC->GetType() == Collider::player_projectile) {
+            		potentialsVec.push_back(currentC);
+            }
+        	break;
+    	case Collider::player_projectile:
+    		// Collides with enemy
+    		if (currentC->GetType() == Collider::enemy) {
+            		potentialsVec.push_back(currentC);
+            }
+        	break;
+    
+    	}
 	}
-	return true;
 }
 
 
