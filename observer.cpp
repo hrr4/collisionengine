@@ -146,7 +146,7 @@ Collider* ICollide::FindNearest(Collider* c1) {
 	for (it = _observers.begin(); it != _observers.end(); ++it) {
 		if (*it != c1) {
         	Collider* c = reinterpret_cast<Collider*>(*it);
-			if (c->GetLayer() > c1->GetLayer()) {
+			if (c->GetLayer() != c1->GetLayer()) {
     			float xOldNear = xClosest;
     			float yOldNear = yClosest;
         		xTemp = c->GetX();
